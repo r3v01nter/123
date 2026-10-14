@@ -1,47 +1,41 @@
-# Windows Island Media Controller
+# Windows Island Media Controller (WIMC)
 
-> An open-source Windows desktop project aiming to recreate and improve the Island Media Controls experience without relying on fragile Explorer modifications.
+> 🏝️ Windows 动态媒体岛控制软件
 
-## Project Background
+## 项目愿景
 
-Windows updates can change internal taskbar structures, causing solutions that depend on Explorer internals to lose compatibility.
+WIMC 是一个面向 Windows 11 的开源动态媒体岛软件。
 
-This project explores a standalone approach that provides a stable media island experience for Windows users.
+项目参考 Windhawk 的 Island Media Controls Mod，但不采用 explorer.exe 注入、Hook 或未公开任务栏内部结构依赖方案。
 
-## Goals
+目标是基于 Windows 官方公开 API，打造稳定、美观、可长期维护的媒体控制体验。
 
-- Modern media island interface for Windows
-- Display current media information
-- Provide playback controls
-- Avoid direct dependency on Explorer internal structures
-- Keep the project free and open source
+## 项目背景
 
-## Development Status
+传统任务栏增强方案可能因为 Windows 更新导致：
 
-🚧 Early planning stage
+- 定位失效
+- 无法吸附任务栏
+- 窗口层级异常
+- 系统升级后失效
 
-## Planned Technology
+WIMC 希望从架构层面解决这些问题。
 
-- C#
-- WinUI 3 / Windows App SDK
-- Windows Media APIs
-- DWM composition technologies
+## 核心技术方向
+
+- C# / .NET 8+
+- Windows App SDK
+- WinUI 3
+- Windows.Media.Control GSMTC
+- DWM 与 Win32 窗口管理
 
 ## Roadmap
 
-### Prototype
-
-- [ ] Transparent overlay window
-- [ ] Taskbar position detection
-- [ ] Media information display
-- [ ] Basic playback controls
-
-### Future
-
-- [ ] Fluent Design interface
-- [ ] Multi-monitor support
-- [ ] Theme customization
-- [ ] Plugin architecture
+- [x] Phase 0：项目规划与规范建立
+- [ ] Phase 1：媒体核心与窗口原型
+- [ ] Phase 2：动态岛 UI 与动画
+- [ ] Phase 3：任务栏感知与多屏适配
+- [ ] Phase 4：开源发布
 
 ## License
 
