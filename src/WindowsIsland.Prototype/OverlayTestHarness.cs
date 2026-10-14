@@ -177,7 +177,7 @@ public static class OverlayTestHarness
     [DllImport("user32.dll", ExactSpelling = true)] private static extern void PostQuitMessage(int nExitCode);
     [DllImport("user32.dll", ExactSpelling = true)] private static extern nint DefWindowProcW(nint hWnd, uint Msg, nint wParam, nint lParam);
     [DllImport("gdi32.dll", ExactSpelling = true)] private static extern nint CreateSolidBrush(uint crColor);
-    [DllImport("gdi32.dll", ExactSpelling = true)] private static extern int FillRect(nint hDC, ref RECT lprc, nint hbr);
+    [DllImport("user32.dll", ExactSpelling = true)] private static extern int FillRect(nint hDC, ref RECT lprc, nint hbr);
     [DllImport("gdi32.dll", ExactSpelling = true)] private static extern int SetBkMode(nint hdc, int mode);
     [DllImport("gdi32.dll", ExactSpelling = true)] private static extern uint SetTextColor(nint hdc, uint color);
 }
