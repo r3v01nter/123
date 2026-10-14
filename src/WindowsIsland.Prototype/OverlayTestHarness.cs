@@ -88,7 +88,7 @@ public static class OverlayTestHarness
         {
             Console.Error.WriteLine("[WIMC] Failed to attach non-activating window styles.");
             DestroyWindow(_hWnd);
-            _styleService.Dispose();
+            _styleService?.Dispose();
             _styleService = null;
             UnregisterClassW(_className, wc.hInstance);
             CleanupBrushes();
