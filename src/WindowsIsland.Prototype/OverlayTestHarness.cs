@@ -15,7 +15,10 @@ public static class OverlayTestHarness
 
     private const uint WM_DESTROY = 0x0002;
     private const uint WM_PAINT = 0x000F;
+    private const uint WM_SETCURSOR = 0x0020;
+    private const uint WM_LBUTTONDOWN = 0x0201;
     private const uint WM_LBUTTONUP = 0x0202;
+    private static readonly nint IDC_ARROW = new(32512);
 
     private delegate nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam);
     private static WndProc? _wndProcDelegate;
@@ -35,6 +38,7 @@ public static class OverlayTestHarness
             cbSize = (uint)Marshal.SizeOf<WNDCLASSEXW>(),
             lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate),
             hInstance = GetModuleHandleW(null),
+            hCursor = LoadCursorW(0, IDC_ARROW),
             hbrBackground = CreateSolidBrush(0x00282828),
             lpszClassName = className
         };
@@ -72,6 +76,18 @@ public static class OverlayTestHarness
 
     private static nint HostWndProc(nint hWnd, uint msg, nint wParam, nint lParam)
     {
+        if (msg == WM_SETCURSOR)
+        {
+            SetCursor(LoadCursorW(0, IDC_ARROW));
+            return 1;
+        }
+
+        if (msg == WM_LBUTTONDOWN)
+        {
+            // Intercept mouse-down locally; do not delegate to DefWindowProcW.
+            return 0;
+        }
+
         if (msg == WM_LBUTTONUP && _mediaService is not null)
         {
             int x = (short)(lParam & 0xFFFF);
@@ -90,6 +106,7 @@ public static class OverlayTestHarness
             });
             return 0;
         }
+
         if (msg == WM_PAINT)
         {
             nint hdc = BeginPaint(hWnd, out PAINTSTRUCT ps);
@@ -97,9 +114,10 @@ public static class OverlayTestHarness
             SetTextColor(hdc, 0x00FFFFFF);
             var rc = new RECT { Left = 10, Top = 12, Right = 800, Bottom = 40 };
             DrawTextW(hdc, _statusText, -1, ref rc, 0x00000020);
-            EndPaint(hWnd, ref ps);
+            EndPaint(hdc, ref ps);
             return 0;
         }
+
         if (msg == WM_DESTROY)
         {
             _styleService?.Dispose();
@@ -108,6 +126,7 @@ public static class OverlayTestHarness
             PostQuitMessage(0);
             return 0;
         }
+
         return DefWindowProcW(hWnd, msg, wParam, lParam);
     }
 
@@ -134,6 +153,8 @@ public static class OverlayTestHarness
     [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)] private static extern ushort RegisterClassExW(ref WNDCLASSEXW lpwcx);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)] private static extern nint CreateWindowExW(uint ex, string cls, string title, uint style, int x, int y, int w, int h, nint parent, nint menu, nint inst, nint param);
     [DllImport("user32.dll", ExactSpelling = true)] private static extern nint GetForegroundWindow();
+    [DllImport("user32.dll", ExactSpelling = true)] private static extern nint LoadCursorW(nint hInstance, nint lpCursorName);
+    [DllImport("user32.dll", ExactSpelling = true)] private static extern nint SetCursor(nint hCursor);
     [DllImport("user32.dll", ExactSpelling = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool InvalidateRect(nint hWnd, nint lpRect, [MarshalAs(UnmanagedType.Bool)] bool bErase);
     [DllImport("user32.dll", ExactSpelling = true)] private static extern nint BeginPaint(nint hWnd, out PAINTSTRUCT lpPaint);
     [DllImport("user32.dll", ExactSpelling = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool EndPaint(nint hWnd, ref PAINTSTRUCT lpPaint);
