@@ -31,7 +31,6 @@ public static class OverlayTestHarness
     private static nint _classBrush;
     private static bool _messageLoopStarted;
     private static string _className = string.Empty;
-        _messageLoopStarted = false;
     private static string _playLabel = "Play";
     private static string _songText = "[v0.001] Ready";
 
@@ -218,6 +217,7 @@ public static class OverlayTestHarness
         _mediaService = null;
         _wndProcDelegate = null;
         _className = string.Empty;
+        _messageLoopStarted = false;
     }
 
     [StructLayout(LayoutKind.Sequential)]
