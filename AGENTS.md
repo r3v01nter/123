@@ -7,30 +7,30 @@ Windows Island Media Controller (WIMC)
 
 1. 禁止 explorer.exe 注入、DLL Injection、Hook、未公开 Taskbar 内部结构依赖。
 2. 媒体控制必须使用公开 API Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager (GSMTC)。
-3. 窗口必须保持 Non-Activating，不得抢占用户焦点，使用 WS_EX_NOACTIVATE 等 Win32 属性。
+3. 窗口必须保持 Non-Activating，不得抢占用户焦点；使用 WS_EX_NOACTIVATE 等 Win32 属性，但必须以真实 Windows 运行测试验证交互行为。
 4. 优先保证 Windows 更新后的长期稳定性。
+5. 不得把 CI 构建成功等同于 GUI 运行验收通过；报告中必须区分已构建、已静态审查、已实际测试。
 
 ## Technology Stack
 
 - C# 12
 - .NET 8+
-- Windows App SDK
-- WinUI 3
 - WinRT GSMTC
-- DWM / Win32 Interop
+- Win32 Interop
+- 目标 UI 技术：Windows App SDK / WinUI 3（尚未在当前原型中实现）
 
-## Architecture
+## Current Repository Architecture
 
-src/
-├── WindowsIsland.Core/  # 媒体、Win32、定位核心
-├── WindowsIsland.UI/   # WinUI 3 界面与动画
-└── WindowsIsland.App/  # 应用入口
+- \`src/WindowsIsland.Core/\`：媒体、Win32、定位核心。
+- \`src/WindowsIsland.Prototype/\`：当前原生 Win32 窗口与 GSMTC 原型。
+- 当前仓库尚未包含已实现的 \`WindowsIsland.UI\` 或 \`WindowsIsland.App\` 项目。
 
 ## Current Phase
 
-- **Phase 0：文档与规范建立 — [已完成]**。
-- **Phase 1：媒体核心与窗口原型 — [待启动]**。
-- Phase 1 开始后，先执行 GSMTC 最小原型验证，再验证非激活窗口交互；在原型验收前禁止生成大量业务代码。
+- **Phase 0：文档与规范建立 — 已完成。**
+- **Phase 1：媒体核心与窗口原型 — 已实现初始原型，构建/打包已成功；真实桌面交互验收仍待完成。**
+- 当前优先事项：验证焦点保持、鼠标交互、媒体会话行为与退出清理。
+- 在关键原型验收前，不得无必要地扩展大量业务功能。
 
 ## Project Philosophy
 
