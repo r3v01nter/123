@@ -29,7 +29,9 @@ public static class OverlayTestHarness
     private static nint _hWnd;
     private static nint _btnBrush;
     private static nint _classBrush;
+    private static bool _messageLoopStarted;
     private static string _className = string.Empty;
+        _messageLoopStarted = false;
     private static string _playLabel = "Play";
     private static string _songText = "[v0.001] Ready";
 
@@ -39,7 +41,7 @@ public static class OverlayTestHarness
         _wndProcDelegate = HostWndProc;
         _className = $"WIMC_Overlay_{Guid.NewGuid():N}";
 
-        _btnBrush = CreateSolidBrush(0x00444444);
+        _btnBrush = CreateSolidBrush(0x00D8D8D8);
         _classBrush = CreateSolidBrush(0x00202020);
         if (_btnBrush == 0 || _classBrush == 0)
         {
@@ -105,6 +107,7 @@ public static class OverlayTestHarness
         _ = Task.Run(() => media.RefreshCurrentSessionAsync());
 
         Console.WriteLine("=== WIMC Overlay [v0.001] Started ===");
+        _messageLoopStarted = true;
         int messageResult;
         while ((messageResult = GetMessageW(out MSG msg, 0, 0, 0)) > 0)
         {
@@ -112,6 +115,7 @@ public static class OverlayTestHarness
             DispatchMessageW(ref msg);
         }
 
+        _messageLoopStarted = false;
         if (messageResult == -1)
             Console.Error.WriteLine($"[WIMC] GetMessageW failed: {Marshal.GetLastPInvokeError()}");
 
@@ -160,7 +164,7 @@ public static class OverlayTestHarness
         {
             nint hdc = BeginPaint(hWnd, out PAINTSTRUCT ps);
             SetBkMode(hdc, 1);
-            SetTextColor(hdc, 0x00FFFFFF);
+            SetTextColor(hdc, 0x00202020);
             DrawBtn(hdc, 8, 6, 48, 38, "|<");
             DrawBtn(hdc, 54, 6, 114, 38, _playLabel);
             DrawBtn(hdc, 120, 6, 160, 38, ">|");
@@ -177,7 +181,8 @@ public static class OverlayTestHarness
             _styleService = null;
             _hWnd = 0;
             CleanupBrushes();
-            PostQuitMessage(0);
+            if (_messageLoopStarted)
+                PostQuitMessage(0);
             return 0;
         }
 
