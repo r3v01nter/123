@@ -18,36 +18,41 @@ public static class OverlayTestHarness
     private const uint WM_SETCURSOR = 0x0020;
     private const uint WM_LBUTTONDOWN = 0x0201;
     private const uint WM_LBUTTONUP = 0x0202;
-    private static readonly nint IDC_ARROW = new(32512);
+    private const nint IDC_ARROW = 32512;
+
+    public const string VersionTag = "v0.001";
 
     private delegate nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam);
     private static WndProc? _wndProcDelegate;
     private static WindowStyleService? _styleService;
     private static IMediaSessionService? _mediaService;
     private static nint _hWnd;
-    private static string _statusText = "[|<] [Play] [>|] [X] | WIMC Ready";
+    private static nint _btnBrush;
+    private static string _playLabel = "Play";
+    private static string _songText = "[v0.001] Ready";
 
     public static void Run(IMediaSessionService media, IslandDockMode dockMode)
     {
         _mediaService = media;
         _wndProcDelegate = HostWndProc;
+        _btnBrush = CreateSolidBrush(0x00444444);
 
-        string className = "WIMC_NonActivating_Overlay";
+        string className = "WIMC_Overlay_0001";
         var wc = new WNDCLASSEXW
         {
             cbSize = (uint)Marshal.SizeOf<WNDCLASSEXW>(),
             lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate),
             hInstance = GetModuleHandleW(null),
             hCursor = LoadCursorW(0, IDC_ARROW),
-            hbrBackground = CreateSolidBrush(0x00282828),
+            hbrBackground = CreateSolidBrush(0x00202020),
             lpszClassName = className
         };
         RegisterClassExW(ref wc);
 
-        var bounds = TaskbarDetector.CalculateIslandBounds(440, 44, dockMode);
+        var bounds = TaskbarDetector.CalculateIslandBounds(500, 44, dockMode);
         _hWnd = CreateWindowExW(
             WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-            className, "WIMC Overlay", WS_POPUP | WS_VISIBLE,
+            className, "WIMC v0.001", WS_POPUP | WS_VISIBLE,
             bounds.X, bounds.Y, bounds.Width, bounds.Height,
             0, 0, wc.hInstance, 0);
 
@@ -56,54 +61,49 @@ public static class OverlayTestHarness
 
         EventHandler<MediaTrackInfo?> handler = (_, info) =>
         {
-            _statusText = info is null
-                ? "[|<] [Play] [>|] [X] | No Active Media"
-                : $"[|<] [{(info.IsPlaying ? "Pause" : "Play")}] [>|] [X] | {info.Title} - {info.Artist}";
+            _playLabel = info is { IsPlaying: true } ? "Pause" : "Play";
+            _songText = info is null ? "[v0.001] No Media" : $"[v0.001] {info.Title} - {info.Artist}";
             if (_hWnd != 0) InvalidateRect(_hWnd, 0, true);
         };
         media.MediaStateChanged += handler;
-        _ = media.RefreshCurrentSessionAsync();
+        _ = Task.Run(() => media.RefreshCurrentSessionAsync());
 
-        Console.WriteLine("[TV-01 Test] Open Notepad, type 'abcdef', click overlay buttons, then type 'ghijk'.");
+        Console.WriteLine("=== WIMC Overlay [v0.001] Started ===");
         while (GetMessageW(out MSG msg, 0, 0, 0) > 0)
         {
             TranslateMessage(ref msg);
             DispatchMessageW(ref msg);
         }
-
         media.MediaStateChanged -= handler;
     }
 
     private static nint HostWndProc(nint hWnd, uint msg, nint wParam, nint lParam)
     {
-        if (msg == WM_SETCURSOR)
-        {
-            SetCursor(LoadCursorW(0, IDC_ARROW));
-            return 1;
-        }
-
-        if (msg == WM_LBUTTONDOWN)
-        {
-            // Intercept mouse-down locally; do not delegate to DefWindowProcW.
-            return 0;
-        }
+        if (msg == WM_SETCURSOR) { SetCursor(LoadCursorW(0, IDC_ARROW)); return 1; }
+        if (msg == WM_LBUTTONDOWN) return 0;
 
         if (msg == WM_LBUTTONUP && _mediaService is not null)
         {
             int x = (short)(lParam & 0xFFFF);
             nint fgBefore = GetForegroundWindow();
-            string action = "None";
+            if (x >= 166 && x <= 198) { DestroyWindow(hWnd); return 0; }
 
-            if (x >= 8 && x < 48) { action = "Prev"; _ = _mediaService.SkipPreviousAsync(); }
-            else if (x >= 50 && x < 105) { action = "PlayPause"; _ = _mediaService.TogglePlayPauseAsync(); }
-            else if (x >= 108 && x < 148) { action = "Next"; _ = _mediaService.SkipNextAsync(); }
-            else if (x >= 150 && x < 185) { action = "Close"; DestroyWindow(hWnd); }
+            string act = "None";
+            Func<Task<bool>>? op = null;
+            if (x >= 8 && x <= 48) { act = "Prev"; op = _mediaService.SkipPreviousAsync; }
+            else if (x >= 54 && x <= 114) { act = "PlayPause"; op = _mediaService.TogglePlayPauseAsync; }
+            else if (x >= 120 && x <= 160) { act = "Next"; op = _mediaService.SkipNextAsync; }
 
-            _ = Task.Delay(50).ContinueWith(_ =>
+            if (op is not null)
             {
-                nint fgAfter = GetForegroundWindow();
-                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Click={action} (X={x}) | FG_Before=0x{fgBefore:X} FG_After=0x{fgAfter:X} | FocusKept={fgBefore == fgAfter}");
-            });
+                _ = Task.Run(async () =>
+                {
+                    bool ok = await op();
+                    await Task.Delay(50);
+                    nint fgAfter = GetForegroundWindow();
+                    Console.WriteLine($"[v0.001] Click={act}(X={x}) | Exec={ok} | FocusKept={fgBefore == fgAfter}");
+                });
+            }
             return 0;
         }
 
@@ -112,9 +112,13 @@ public static class OverlayTestHarness
             nint hdc = BeginPaint(hWnd, out PAINTSTRUCT ps);
             SetBkMode(hdc, 1);
             SetTextColor(hdc, 0x00FFFFFF);
-            var rc = new RECT { Left = 10, Top = 12, Right = 800, Bottom = 40 };
-            DrawTextW(hdc, _statusText, -1, ref rc, 0x00000020);
-            EndPaint(hdc, ref ps);
+            DrawBtn(hdc, 8, 6, 48, 38, "|<");
+            DrawBtn(hdc, 54, 6, 114, 38, _playLabel);
+            DrawBtn(hdc, 120, 6, 160, 38, ">|");
+            DrawBtn(hdc, 166, 6, 198, 38, "X");
+            var rc = new RECT { Left = 208, Top = 6, Right = 492, Bottom = 38 };
+            DrawTextW(hdc, _songText, -1, ref rc, 0x24);
+            EndPaint(hWnd, ref ps);
             return 0;
         }
 
@@ -128,6 +132,13 @@ public static class OverlayTestHarness
         }
 
         return DefWindowProcW(hWnd, msg, wParam, lParam);
+    }
+
+    private static void DrawBtn(nint hdc, int l, int t, int r, int b, string txt)
+    {
+        var rc = new RECT { Left = l, Top = t, Right = r, Bottom = b };
+        FillRect(hdc, ref rc, _btnBrush);
+        DrawTextW(hdc, txt, -1, ref rc, 0x25);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -166,6 +177,7 @@ public static class OverlayTestHarness
     [DllImport("user32.dll", ExactSpelling = true)] private static extern void PostQuitMessage(int nExitCode);
     [DllImport("user32.dll", ExactSpelling = true)] private static extern nint DefWindowProcW(nint hWnd, uint Msg, nint wParam, nint lParam);
     [DllImport("gdi32.dll", ExactSpelling = true)] private static extern nint CreateSolidBrush(uint crColor);
+    [DllImport("gdi32.dll", ExactSpelling = true)] private static extern int FillRect(nint hDC, ref RECT lprc, nint hbr);
     [DllImport("gdi32.dll", ExactSpelling = true)] private static extern int SetBkMode(nint hdc, int mode);
     [DllImport("gdi32.dll", ExactSpelling = true)] private static extern uint SetTextColor(nint hdc, uint color);
 }
