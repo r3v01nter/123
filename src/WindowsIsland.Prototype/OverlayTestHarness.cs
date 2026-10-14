@@ -28,6 +28,8 @@ public static class OverlayTestHarness
     private static IMediaSessionService? _mediaService;
     private static nint _hWnd;
     private static nint _btnBrush;
+    private static nint _classBrush;
+    private static string _className = string.Empty;
     private static string _playLabel = "Play";
     private static string _songText = "[v0.001] Ready";
 
@@ -35,29 +37,63 @@ public static class OverlayTestHarness
     {
         _mediaService = media;
         _wndProcDelegate = HostWndProc;
-        _btnBrush = CreateSolidBrush(0x00444444);
+        _className = $"WIMC_Overlay_{Guid.NewGuid():N}";
 
-        string className = "WIMC_Overlay_0001";
+        _btnBrush = CreateSolidBrush(0x00444444);
+        _classBrush = CreateSolidBrush(0x00202020);
+        if (_btnBrush == 0 || _classBrush == 0)
+        {
+            CleanupBrushes();
+            Console.Error.WriteLine("[WIMC] Failed to create GDI brushes.");
+            return;
+        }
+
         var wc = new WNDCLASSEXW
         {
             cbSize = (uint)Marshal.SizeOf<WNDCLASSEXW>(),
             lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate),
             hInstance = GetModuleHandleW(null),
             hCursor = LoadCursorW(0, IDC_ARROW),
-            hbrBackground = CreateSolidBrush(0x00202020),
-            lpszClassName = className
+            hbrBackground = _classBrush,
+            lpszClassName = _className
         };
-        RegisterClassExW(ref wc);
+
+        if (RegisterClassExW(ref wc) == 0)
+        {
+            Console.Error.WriteLine($"[WIMC] RegisterClassExW failed: {Marshal.GetLastPInvokeError()}");
+            CleanupBrushes();
+            ResetRunState();
+            return;
+        }
 
         var bounds = TaskbarDetector.CalculateIslandBounds(500, 44, dockMode);
         _hWnd = CreateWindowExW(
             WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-            className, "WIMC v0.001", WS_POPUP | WS_VISIBLE,
+            _className, "WIMC v0.001", WS_POPUP | WS_VISIBLE,
             bounds.X, bounds.Y, bounds.Width, bounds.Height,
             0, 0, wc.hInstance, 0);
 
+        if (_hWnd == 0)
+        {
+            Console.Error.WriteLine($"[WIMC] CreateWindowExW failed: {Marshal.GetLastPInvokeError()}");
+            UnregisterClassW(_className, wc.hInstance);
+            CleanupBrushes();
+            ResetRunState();
+            return;
+        }
+
         _styleService = new WindowStyleService();
-        _styleService.AttachNonActivatingOverlay(_hWnd);
+        if (!_styleService.AttachNonActivatingOverlay(_hWnd))
+        {
+            Console.Error.WriteLine("[WIMC] Failed to attach non-activating window styles.");
+            DestroyWindow(_hWnd);
+            _styleService.Dispose();
+            _styleService = null;
+            UnregisterClassW(_className, wc.hInstance);
+            CleanupBrushes();
+            ResetRunState();
+            return;
+        }
 
         EventHandler<MediaTrackInfo?> handler = (_, info) =>
         {
@@ -69,12 +105,25 @@ public static class OverlayTestHarness
         _ = Task.Run(() => media.RefreshCurrentSessionAsync());
 
         Console.WriteLine("=== WIMC Overlay [v0.001] Started ===");
-        while (GetMessageW(out MSG msg, 0, 0, 0) > 0)
+        int messageResult;
+        while ((messageResult = GetMessageW(out MSG msg, 0, 0, 0)) > 0)
         {
             TranslateMessage(ref msg);
             DispatchMessageW(ref msg);
         }
+
+        if (messageResult == -1)
+            Console.Error.WriteLine($"[WIMC] GetMessageW failed: {Marshal.GetLastPInvokeError()}");
+
         media.MediaStateChanged -= handler;
+        if (_hWnd != 0)
+            DestroyWindow(_hWnd);
+
+        _styleService?.Dispose();
+        _styleService = null;
+        UnregisterClassW(_className, wc.hInstance);
+        CleanupBrushes();
+        ResetRunState();
     }
 
     private static nint HostWndProc(nint hWnd, uint msg, nint wParam, nint lParam)
@@ -127,6 +176,7 @@ public static class OverlayTestHarness
             _styleService?.Dispose();
             _styleService = null;
             _hWnd = 0;
+            CleanupBrushes();
             PostQuitMessage(0);
             return 0;
         }
@@ -137,8 +187,32 @@ public static class OverlayTestHarness
     private static void DrawBtn(nint hdc, int l, int t, int r, int b, string txt)
     {
         var rc = new RECT { Left = l, Top = t, Right = r, Bottom = b };
-        FillRect(hdc, ref rc, _btnBrush);
+        if (_btnBrush != 0)
+            FillRect(hdc, ref rc, _btnBrush);
         DrawTextW(hdc, txt, -1, ref rc, 0x25);
+    }
+
+    private static void CleanupBrushes()
+    {
+        if (_btnBrush != 0)
+        {
+            DeleteObject(_btnBrush);
+            _btnBrush = 0;
+        }
+
+        if (_classBrush != 0)
+        {
+            DeleteObject(_classBrush);
+            _classBrush = 0;
+        }
+    }
+
+    private static void ResetRunState()
+    {
+        _hWnd = 0;
+        _mediaService = null;
+        _wndProcDelegate = null;
+        _className = string.Empty;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -161,8 +235,9 @@ public static class OverlayTestHarness
     private struct MSG { public nint hwnd; public uint message; public nint wParam, lParam; public uint time; public int pt_x, pt_y; }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)] private static extern nint GetModuleHandleW(string? lpModuleName);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)] private static extern ushort RegisterClassExW(ref WNDCLASSEXW lpwcx);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)] private static extern nint CreateWindowExW(uint ex, string cls, string title, uint style, int x, int y, int w, int h, nint parent, nint menu, nint inst, nint param);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)] private static extern ushort RegisterClassExW(ref WNDCLASSEXW lpwcx);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool UnregisterClassW(string lpClassName, nint hInstance);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)] private static extern nint CreateWindowExW(uint ex, string cls, string title, uint style, int x, int y, int w, int h, nint parent, nint menu, nint inst, nint param);
     [DllImport("user32.dll", ExactSpelling = true)] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll", ExactSpelling = true)] private static extern nint LoadCursorW(nint hInstance, nint lpCursorName);
     [DllImport("user32.dll", ExactSpelling = true)] private static extern nint SetCursor(nint hCursor);
@@ -170,13 +245,14 @@ public static class OverlayTestHarness
     [DllImport("user32.dll", ExactSpelling = true)] private static extern nint BeginPaint(nint hWnd, out PAINTSTRUCT lpPaint);
     [DllImport("user32.dll", ExactSpelling = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool EndPaint(nint hWnd, ref PAINTSTRUCT lpPaint);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)] private static extern int DrawTextW(nint hdc, string lpchText, int cchText, ref RECT lprc, uint format);
-    [DllImport("user32.dll", ExactSpelling = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool DestroyWindow(nint hWnd);
-    [DllImport("user32.dll", ExactSpelling = true)] private static extern int GetMessageW(out MSG lpMsg, nint hWnd, uint min, uint max);
+    [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool DestroyWindow(nint hWnd);
+    [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern int GetMessageW(out MSG lpMsg, nint hWnd, uint min, uint max);
     [DllImport("user32.dll", ExactSpelling = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool TranslateMessage(ref MSG lpMsg);
     [DllImport("user32.dll", ExactSpelling = true)] private static extern nint DispatchMessageW(ref MSG lpMsg);
     [DllImport("user32.dll", ExactSpelling = true)] private static extern void PostQuitMessage(int nExitCode);
     [DllImport("user32.dll", ExactSpelling = true)] private static extern nint DefWindowProcW(nint hWnd, uint Msg, nint wParam, nint lParam);
     [DllImport("gdi32.dll", ExactSpelling = true)] private static extern nint CreateSolidBrush(uint crColor);
+    [DllImport("gdi32.dll", ExactSpelling = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool DeleteObject(nint hObject);
     [DllImport("user32.dll", ExactSpelling = true)] private static extern int FillRect(nint hDC, ref RECT lprc, nint hbr);
     [DllImport("gdi32.dll", ExactSpelling = true)] private static extern int SetBkMode(nint hdc, int mode);
     [DllImport("gdi32.dll", ExactSpelling = true)] private static extern uint SetTextColor(nint hdc, uint color);
