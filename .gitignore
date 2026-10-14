@@ -1,0 +1,13 @@
+## Visual Studio / .NET / Windows App SDK
+[Dd]ebug/
+[Rr]elease/
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.suo
+.vscode/
+.idea/
+AppPackages/
+BundleArtifacts/
+project.assets.json
