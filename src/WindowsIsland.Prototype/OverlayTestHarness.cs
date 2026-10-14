@@ -179,7 +179,7 @@ public static class OverlayTestHarness
             _styleService?.Dispose();
             _styleService = null;
             _hWnd = 0;
-            CleanupBrushes();
+            CleanupButtonBrush();
             if (_messageLoopStarted)
                 PostQuitMessage(0);
             return 0;
@@ -198,17 +198,22 @@ public static class OverlayTestHarness
 
     private static void CleanupBrushes()
     {
-        if (_btnBrush != 0)
-        {
-            DeleteObject(_btnBrush);
-            _btnBrush = 0;
-        }
+        CleanupButtonBrush();
 
         if (_classBrush != 0)
         {
             DeleteObject(_classBrush);
             _classBrush = 0;
         }
+    }
+
+    private static void CleanupButtonBrush()
+    {
+        if (_btnBrush == 0)
+            return;
+
+        DeleteObject(_btnBrush);
+        _btnBrush = 0;
     }
 
     private static void ResetRunState()
