@@ -24,3 +24,12 @@ jobs:
 
       - name: Build Solution (x64 Release)
         run: dotnet build WIMC.sln -c Release -p:Platform=x64 --no-restore
+
+      - name: Publish Prototype Executable
+        run: dotnet publish src/WindowsIsland.Prototype/WindowsIsland.Prototype.csproj -c Release -r win-x64 --self-contained false -o publish
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WIMC-Prototype-x64
+          path: publish/
